@@ -1,0 +1,114 @@
+{
+  "name": "02 — Hourly Hot Lead Digest → Gmail",
+  "nodes": [
+    {
+      "id": "b2c3d4e5-0002-0002-0002-000000000001",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300],
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 1 }]
+        }
+      }
+    },
+    {
+      "id": "b2c3d4e5-0002-0002-0002-000000000002",
+      "name": "GET Hot Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:8000/leads",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "classification", "value": "Hot" },
+            { "name": "status",         "value": "new" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "b2c3d4e5-0002-0002-0002-000000000003",
+      "name": "Any Hot Leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "b2c3d4e5-0002-0002-0002-000000000004",
+      "name": "Format Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 220],
+      "parameters": {
+        "jsCode": "const leads = $input.first().json;\nconst rows = leads.map(l => {\n  const budget = l.budget_hint ? ` | Budget: ${l.budget_hint}` : '';\n  const timeline = l.timeline_hint ? ` | Timeline: ${l.timeline_hint}` : '';\n  return `<li><strong>${l.name}</strong> &lt;${l.email}&gt;${budget}${timeline}<br/><em>${l.reasoning}</em><br/>Reply: ${l.suggested_reply}</li>`;\n}).join('\\n');\n\nreturn [{\n  json: {\n    count: leads.length,\n    html: `<h2>🔥 ${leads.length} Hot Lead${leads.length > 1 ? 's' : ''} Awaiting Follow-up</h2><ul>${rows}</ul><p>Open the <a href='http://localhost:3000'>dashboard</a> to action these.</p>`\n  }\n}];"
+      }
+    },
+    {
+      "id": "b2c3d4e5-0002-0002-0002-000000000005",
+      "name": "Send Digest Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1120, 220],
+      "parameters": {
+        "operation": "send",
+        "sendTo": "YOUR_EMAIL@gmail.com",
+        "subject": "=🔥 {{ $json.count }} Hot Lead{{ $json.count > 1 ? 's' : '' }} — Hourly Digest",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Hour": {
+      "main": [
+        [{ "node": "GET Hot Leads", "type": "main", "index": 0 }]
+      ]
+    },
+    "GET Hot Leads": {
+      "main": [
+        [{ "node": "Any Hot Leads?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Any Hot Leads?": {
+      "main": [
+        [{ "node": "Format Digest", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Format Digest": {
+      "main": [
+        [{ "node": "Send Digest Email", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "name": "01 — Google Sheet → Classify Lead → Gmail Notification",
+  "nodes": [
+    {
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Google Sheets Trigger",
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 4,
+      "position": [240, 300],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "event": "rowAdded",
+        "pollTimes": {
+          "item": [{ "mode": "everyMinute" }]
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0001-0001-0001-000000000002",
+      "name": "POST /lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8000/lead",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "name",    "value": "={{ $json.name }}"    },
+            { "name": "email",   "value": "={{ $json.email }}"   },
+            { "name": "phone",   "value": "={{ $json.phone || '' }}"  },
+            { "name": "message", "value": "={{ $json.message }}" },
+            { "name": "source",  "value": "={{ $json.source || 'google_sheet' }}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0001-0001-0001-000000000003",
+      "name": "Send Gmail Notification",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [680, 300],
+      "parameters": {
+        "operation": "send",
+        "sendTo": "YOUR_EMAIL@gmail.com",
+        "subject": "={{ $json.classification === 'Hot' ? '🔥' : ($json.classification === 'Warm' ? '🌤' : ($json.classification === 'Spam' ? '🚫' : '🧊')) }} New {{ $json.classification }} Lead: {{ $('Google Sheets Trigger').item.json.name }}",
+        "message": "=<p><strong>Name:</strong> {{ $('Google Sheets Trigger').item.json.name }}</p>\n<p><strong>Email:</strong> {{ $('Google Sheets Trigger').item.json.email }}</p>\n<p><strong>Phone:</strong> {{ $('Google Sheets Trigger').item.json.phone }}</p>\n<p><strong>Source:</strong> {{ $('Google Sheets Trigger').item.json.source }}</p>\n<p><strong>Classification:</strong> {{ $json.classification }} (confidence: {{ ($json.confidence * 100).toFixed(0) }}%)</p>\n<p><strong>Reasoning:</strong> {{ $json.reasoning }}</p>\n{{ $json.budget_hint ? '<p><strong>Budget:</strong> ' + $json.budget_hint + '</p>' : '' }}\n{{ $json.timeline_hint ? '<p><strong>Timeline:</strong> ' + $json.timeline_hint + '</p>' : '' }}\n<hr/>\n<p><strong>Message:</strong><br/>{{ $('Google Sheets Trigger').item.json.message }}</p>\n<hr/>\n<p><strong>Suggested reply:</strong><br/><em>{{ $json.suggested_reply }}</em></p>",
+        "options": {
+          "replyTo": "={{ $('Google Sheets Trigger').item.json.email }}"
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Google Sheets Trigger": {
+      "main": [
+        [{ "node": "POST /lead", "type": "main", "index": 0 }]
+      ]
+    },
+    "POST /lead": {
+      "main": [
+        [{ "node": "Send Gmail Notification", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
